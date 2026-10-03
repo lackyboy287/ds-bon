@@ -48,6 +48,8 @@ label{display:block;font-size:13px;color:var(--mute);margin:10px 0 4px}
 .burger i{display:block;width:20px;height:2px;background:currentColor;box-shadow:0 -6px currentColor,0 6px currentColor}
 .item.sorting{display:flex;gap:10px;align-items:center}.ib{flex:1;min-width:0}
 .mv{display:flex;flex-direction:column;gap:6px}.mv .btn{width:46px;height:38px;padding:0;font-size:16px}
+.vr{padding:9px 0;border-bottom:1px solid var(--line)}.vr span{display:block;color:var(--mute);font-size:13px}.vr b{font-weight:500;white-space:pre-wrap;overflow-wrap:anywhere}
+.calls{display:flex;flex-direction:column;gap:8px;margin-top:14px}.call{display:block;text-align:center;text-decoration:none;font-size:17px;padding:14px}
 .head h2{margin:0;font-size:18px;line-height:1.2}.head small{color:var(--mute);font-size:13px}
 #mdlg{margin:0;height:100%;max-height:100%;width:min(88vw,380px);border-radius:0 18px 18px 0;overflow:auto}
 #mdlg .in{padding:calc(16px + env(safe-area-inset-top,0px)) 16px 16px}
@@ -220,11 +222,36 @@ function newList(){
     LISTS.push($("nk").value==="d"?{id,name:n,fields:[["name","Tên tài liệu","text"],["date","Ngày","date"],["kind","Loại (nghị quyết, biên bản, ảnh…)","text"],["files","Ảnh / tệp đính kèm","file"],["note","Ghi chú","area"]],show:["date","kind","files"]}:{id,name:n,fields:[["name","Họ và tên","text"],["phone","Số điện thoại","tel"],["note","Ghi chú","area"]],show:["phone"]});
     data[id]=[];cur=id;save();render();$("dlg").close();openCols()};
   $("dlg").showModal();setTimeout(()=>$("nl").focus(),60)}
+function viewItem(id){
+  const l=L(),r=data[l.id].find(x=>x.id===id);if(!r)return;
+  const main=l.fields[0][0],fk=[];let h=`<h1>${esc(r[main])}</h1>`,calls="",any=false;
+  l.fields.slice(1).forEach(([k,n,t])=>{const v=r[k];
+    if(t==="file"){if(v&&v.length){any=true;fk.push(k);h+=`<div class="vr"><span>${esc(n)}</span><div data-vk="${k}"></div></div>`}return}
+    if(!v)return;any=true;
+    h+=`<div class="vr"><span>${esc(n)}</span><b>${esc(fmt(t,v))}</b></div>`;
+    if(t==="tel"){const num=String(v).replace(/[^\d+]/g,"");if(num)calls+=`<a class="btn pri call" href="tel:${num}">📞 Gọi ${esc(v)}</a>`}});
+  if(!any)h+=`<p class="sub">Chưa có thông tin khác. Bấm Sửa để bổ sung.</p>`;
+  h+=(calls?`<div class="calls">${calls}</div>`:"")+`<div class="row"><button type="button" class="btn" data-c="x">Đóng</button><button type="button" class="btn pri" data-c="e">Sửa</button></div>`;
+  $("f").innerHTML=h;$("f").onsubmit=e=>e.preventDefault();
+  const isImg=a=>a.type.startsWith("image/");
+  fk.forEach(async k=>{const box=document.querySelector(`[data-vk="${k}"]`);
+    box.innerHTML=r[k].map(a=>`<div class="at"><div class="th" data-th="${a.id}">${isImg(a)?"":"📄"}</div><div class="an"><b>${esc(a.name)}</b><span>${fsize(a.size)}</span></div><button type="button" class="btn" data-va="${a.id}" data-kk="${k}">${isImg(a)?"Xem":"Lưu về máy"}</button></div>`).join("");
+    for(const a of r[k])if(isImg(a)){try{const o=await fget(a.id),el=box.querySelector(`[data-th="${a.id}"]`);if(o&&el){const im=new Image();im.src=URL.createObjectURL(o.blob);el.appendChild(im)}}catch(e){}}});
+  $("f").onclick=async e=>{const t=e.target.closest("button");if(!t)return;
+    if(t.dataset.c==="x"){$("dlg").close();return}
+    if(t.dataset.c==="e"){$("dlg").close();open(id);return}
+    if(t.dataset.va){const a=(r[t.dataset.kk]||[]).find(x=>x.id===t.dataset.va);if(!a)return;
+      const o=await fget(a.id).catch(()=>null);if(!o){toast("Không mở được tệp");return}
+      if(!isImg(a)){saveFile(a.name,o.blob);return}
+      const d=$("cdlg"),u=URL.createObjectURL(o.blob);
+      d.innerHTML=`<form method="dialog" style="padding:12px"><img src="${u}" alt="" style="max-width:100%;max-height:68vh;display:block;margin:0 auto;border-radius:8px"><div class="row"><button class="btn" value="no">Đóng</button><button type="button" class="btn pri" id="sv">Lưu về máy</button></div></form>`;
+      d.onclose=()=>URL.revokeObjectURL(u);$("sv").onclick=()=>saveFile(a.name,o.blob);d.showModal()}};
+  $("dlg").showModal()}
 $("list").onclick=e=>{const i=e.target.closest(".item");if(!i)return;
   const m=e.target.closest("[data-m]");
   if(m){const a=data[cur],k=a.findIndex(x=>x.id===i.dataset.i),j=k+(+m.dataset.m);
     if(k<0||j<0||j>=a.length)return;[a[k],a[j]]=[a[j],a[k]];save();render();return}
-  if(!sorting)open(i.dataset.i)};
+  if(!sorting)viewItem(i.dataset.i)};
 $("sort").onclick=()=>{sorting=!sorting;$("sort").textContent=sorting?"Xong":"Sắp xếp";$("sort").classList.toggle("pri",sorting);$("q").disabled=sorting;render()};
 function openMenu(){
   const d=$("mdlg");
