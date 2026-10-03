@@ -66,16 +66,29 @@ label{display:block;font-size:13px;color:var(--mute);margin:10px 0 4px}
 .at .an{flex:1;min-width:0;display:flex;flex-direction:column;font-size:13px}
 .at .an b{font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.at .an span{color:var(--mute)}
 .at .btn{padding:8px 10px;font-size:13px}
+[hidden]{display:none!important}
+.big{font-size:25px;line-height:1.25;margin:22px 0 6px}
+.by{display:inline-block;margin:0 0 10px;padding:5px 12px;border-radius:999px;background:var(--chip);font-size:13px;font-weight:500}
+.back{font:inherit;background:none;border:0;color:var(--red);padding:6px 0 2px;font-size:15px;font-weight:500}
+.tw{position:relative;display:flex}.tw .tile{flex:1}.tile b{padding-right:26px}
+.tedit{position:absolute;top:6px;right:6px;width:34px;height:34px;border-radius:999px;border:0;background:rgba(127,127,127,.2);color:inherit;font-size:15px;padding:0}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:90px;background:var(--ink);color:var(--bg);padding:8px 14px;border-radius:10px;font-size:14px;display:none}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>Phần mềm quản lý Bon R Lông</h1>
-  <p class="sub">Dữ liệu chỉ lưu trong máy này. Nhớ bấm “Sao lưu” định kỳ.</p>
+  <div id="homeV">
+    <h1 class="big">Phần mềm quản lý Bon R Lông</h1>
+    <div class="by">Người tạo: Trần Tuấn Anh</div>
+    <p class="sub">Dữ liệu chỉ lưu trong máy này. Nhớ bấm “Sao lưu” định kỳ.</p>
+    <div class="grid" id="hgrid"></div>
+  </div>
+  <div id="listV" hidden>
+  <button class="back" id="home">‹ Trang chủ</button>
   <div class="head"><button class="btn burger" id="menu" aria-label="Mở danh sách"><i></i></button><div><h2 id="curname"></h2><small id="curcount"></small></div><button class="btn" id="sort" style="margin-left:auto">Sắp xếp</button></div>
   <div class="bar"><input id="q" class="srch" type="search" placeholder="Tìm kiếm theo tên, SĐT, ghi chú…" aria-label="Tìm kiếm"></div>
   <div id="list"></div>
+  </div>
   <div class="foot">
     <button class="btn" id="cols">Chỉnh cột</button>
     <button class="btn" id="bk">Sao lưu (JSON)</button>
@@ -96,7 +109,7 @@ const PRESET=[
  {id:"cn",name:"Hộ cận nghèo",fields:[["name","Chủ hộ","text"],["people","Số nhân khẩu","number"],["year","Năm công nhận","number"],["cause","Nguyên nhân / hoàn cảnh","area"],["phone","Số điện thoại","tel"],["note","Ghi chú","area"]],show:["people","year","phone"]}
 ];
 const KEY="bon-rlong-v2",OLD="bon-rlong-lists-v1";
-let sorting=false;
+let sorting=false,view="home";
 let LISTS=JSON.parse(JSON.stringify(PRESET)),data={dv:[],tq:[],hn:[],cn:[]},cur="dv";
 try{
   const s=localStorage.getItem(KEY);
@@ -137,8 +150,24 @@ async function saveFile(name,data,type){
     if(navigator.canShare({files:[f]})){try{await navigator.share({files:[f]});return true}catch(e){if(e&&e.name==="AbortError")return false}}}}catch(e){}
   try{const a=document.createElement("a");a.href=URL.createObjectURL(bl);a.download=name;document.body.appendChild(a);a.click();a.remove();return true}catch(e){toast("Không lưu được file");return false}
 }
+function tilesHTML(){return LISTS.map(l=>`<div class="tw"><button class="tile${view==="list"&&l.id===cur?" on":""}" data-id="${l.id}"><b>${esc(l.name)}</b><span>${data[l.id].length} mục</span></button><button class="tedit" data-rn="${l.id}" aria-label="Sửa tên">✎</button></div>`).join("")+`<button class="tile add" data-id="+">+ Thêm danh sách</button>`}
+function goList(id){cur=id;view="list";sorting=false;$("sort").textContent="Sắp xếp";$("sort").classList.remove("pri");$("q").disabled=false;$("q").value="";render();scrollTo(0,0)}
+function tileClick(e,d){
+  const rn=e.target.closest("[data-rn]");if(rn){renameList(rn.dataset.rn);return}
+  const t=e.target.closest(".tile");if(!t)return;
+  if(d)d.close();
+  if(t.dataset.id==="+")newList();else goList(t.dataset.id)}
+function renameList(id){
+  const l=LISTS.find(x=>x.id===id);if(!l)return;
+  $("f").onclick=null;
+  $("f").innerHTML=`<h1>Đổi tên danh sách</h1><label for="rn">Tên mới</label><input id="rn" value="${esc(l.name)}" required><div class="row"><button type="button" class="btn" id="x">Hủy</button><button class="btn pri" type="submit">Lưu</button></div>`;
+  $("x").onclick=()=>$("dlg").close();
+  $("f").onsubmit=e=>{e.preventDefault();const n=$("rn").value.trim();if(!n)return;l.name=n;save();$("dlg").close();render();if($("mdlg").open)openMenu();toast("Đã đổi tên")};
+  $("dlg").showModal();setTimeout(()=>{const i=$("rn");i.focus();i.select()},60)}
 function render(){
   fix();
+  $("homeV").hidden=view!=="home";$("listV").hidden=view!=="list";$("add").hidden=view!=="list";$("cols").hidden=$("csv").hidden=view!=="list";
+  if(view==="home"){$("hgrid").innerHTML=tilesHTML();return}
   const cl=L();$("curname").textContent=cl.name;$("curcount").textContent=data[cl.id].length+" mục";
   const l=L(),q=$("q").value.trim().toLowerCase(),main=l.fields[0][0];
   const rows=data[l.id].filter(r=>sorting||!q||Object.values(r).map(v=>Array.isArray(v)?v.map(a=>a.name).join(" "):v).join(" ").toLowerCase().includes(q));
@@ -204,7 +233,7 @@ function openCols(){
       const k="c_"+Date.now().toString(36);w.push([k,n,t]);if(t!=="area")show.add(k);draw()};
     $("dl").onclick=async()=>{if(LISTS.length<2){toast("Phải giữ lại ít nhất 1 danh sách");return}
       if(await ask("Xóa danh sách “"+l.name+"” và toàn bộ "+data[l.id].length+" mục trong đó?")){
-        for(const rc of data[l.id]){try{await rmFiles(l,rc)}catch(e){}}LISTS=LISTS.filter(x=>x.id!==l.id);delete data[l.id];cur=LISTS[0].id;save();render();$("dlg").close()}};
+        for(const rc of data[l.id]){try{await rmFiles(l,rc)}catch(e){}}LISTS=LISTS.filter(x=>x.id!==l.id);delete data[l.id];cur=LISTS[0].id;view="home";save();render();$("dlg").close()}};
     $("ok").onclick=()=>{sync();l.name=name.v;l.fields=w;l.show=w.map(f=>f[0]).filter(k=>show.has(k));save();render();$("dlg").close();toast("Đã cập nhật")}
   };
   $("f").onsubmit=e=>e.preventDefault();
@@ -220,7 +249,7 @@ function newList(){
   $("f").onsubmit=e=>{e.preventDefault();const n=$("nl").value.trim();if(!n)return;
     const id="l_"+Date.now().toString(36);
     LISTS.push($("nk").value==="d"?{id,name:n,fields:[["name","Tên tài liệu","text"],["date","Ngày","date"],["kind","Loại (nghị quyết, biên bản, ảnh…)","text"],["files","Ảnh / tệp đính kèm","file"],["note","Ghi chú","area"]],show:["date","kind","files"]}:{id,name:n,fields:[["name","Họ và tên","text"],["phone","Số điện thoại","tel"],["note","Ghi chú","area"]],show:["phone"]});
-    data[id]=[];cur=id;save();render();$("dlg").close();openCols()};
+    data[id]=[];cur=id;view="list";save();render();$("dlg").close();openCols()};
   $("dlg").showModal();setTimeout(()=>$("nl").focus(),60)}
 function viewItem(id){
   const l=L(),r=data[l.id].find(x=>x.id===id);if(!r)return;
@@ -255,11 +284,12 @@ $("list").onclick=e=>{const i=e.target.closest(".item");if(!i)return;
 $("sort").onclick=()=>{sorting=!sorting;$("sort").textContent=sorting?"Xong":"Sắp xếp";$("sort").classList.toggle("pri",sorting);$("q").disabled=sorting;render()};
 function openMenu(){
   const d=$("mdlg");
-  d.innerHTML=`<div class="in"><h1>Danh sách</h1><div class="grid">`+LISTS.map(l=>`<button class="tile${l.id===cur?" on":""}" data-id="${l.id}"><b>${esc(l.name)}</b><span>${data[l.id].length} mục</span></button>`).join("")+`<button class="tile add" data-id="+">+ Thêm danh sách</button></div></div>`;
-  d.onclick=e=>{if(e.target===d){d.close();return}
-    const t=e.target.closest(".tile");if(!t)return;d.close();
-    if(t.dataset.id==="+")newList();else{cur=t.dataset.id;$("q").value="";render()}};
-  d.showModal()}
+  d.innerHTML=`<div class="in"><h1>Danh sách</h1><div class="grid">${tilesHTML()}</div><button class="btn" id="gh" style="width:100%;margin-top:14px">‹ Về trang chủ</button></div>`;
+  $("gh").onclick=()=>{d.close();view="home";render()};
+  d.onclick=e=>{if(e.target===d){d.close();return}tileClick(e,d)};
+  if(!d.open)d.showModal()}
+$("hgrid").onclick=e=>tileClick(e,null);
+$("home").onclick=()=>{view="home";render();scrollTo(0,0)};
 $("menu").onclick=openMenu;
 $("add").onclick=()=>open(null);
 $("cols").onclick=openCols;
@@ -275,7 +305,7 @@ $("imp").onclick=()=>$("file").click();
 $("file").onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();
   r.onload=async()=>{try{const d=JSON.parse(r.result);if(!(await ask("Khôi phục sẽ thay thế toàn bộ dữ liệu hiện tại. Tiếp tục?","Khôi phục")))return;
     if(d.v>=2){LISTS=d.schema;data=d.data;if(d.files){await fclear();for(const f of d.files){const bin=atob(f.b64),u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);await fput({id:f.id,name:f.name,type:f.type,blob:new Blob([u],{type:f.type})})}}}else{LISTS=JSON.parse(JSON.stringify(PRESET));data=Object.assign({dv:[],tq:[],hn:[],cn:[]},d)}
-    cur=LISTS[0].id;save();render();toast("Đã khôi phục")}catch(err){toast("File không hợp lệ")}};
+    cur=LISTS[0].id;view="home";save();render();toast("Đã khôi phục")}catch(err){toast("File không hợp lệ")}};
   r.readAsText(f);e.target.value=""};
 render();
 try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(e){}
