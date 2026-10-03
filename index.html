@@ -70,8 +70,7 @@ label{display:block;font-size:13px;color:var(--mute);margin:10px 0 4px}
 .big{font-size:25px;line-height:1.25;margin:22px 0 6px}
 .by{display:inline-block;margin:0 0 10px;padding:5px 12px;border-radius:999px;background:var(--chip);font-size:13px;font-weight:500}
 .back{font:inherit;background:none;border:0;color:var(--red);padding:6px 0 2px;font-size:15px;font-weight:500}
-.tw{position:relative;display:flex}.tw .tile{flex:1}.tile b{padding-right:26px}
-.tedit{position:absolute;top:6px;right:6px;width:34px;height:34px;border-radius:999px;border:0;background:rgba(127,127,127,.2);color:inherit;font-size:15px;padding:0}
+.tw{position:relative;display:flex}.tw .tile{flex:1}.renaming .tile:not(.add){border-color:var(--red);border-style:dashed}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:90px;background:var(--ink);color:var(--bg);padding:8px 14px;border-radius:10px;font-size:14px;display:none}
 </style>
 </head>
@@ -81,6 +80,7 @@ label{display:block;font-size:13px;color:var(--mute);margin:10px 0 4px}
     <h1 class="big">Phần mềm quản lý Bon R Lông</h1>
     <div class="by">Người tạo: Trần Tuấn Anh</div>
     <p class="sub">Dữ liệu chỉ lưu trong máy này. Nhớ bấm “Sao lưu” định kỳ.</p>
+    <p class="sub" id="rnhint" hidden><b>Chạm vào danh sách cần đổi tên.</b></p>
     <div class="grid" id="hgrid"></div>
   </div>
   <div id="listV" hidden>
@@ -94,6 +94,7 @@ label{display:block;font-size:13px;color:var(--mute);margin:10px 0 4px}
     <button class="btn" id="bk">Sao lưu (JSON)</button>
     <button class="btn" id="csv">Xuất Excel (CSV)</button>
     <button class="btn" id="imp">Khôi phục</button>
+    <button class="btn" id="ren">Sửa tên</button>
     <input type="file" id="file" accept=".json,application/json" hidden>
   </div>
 </div>
@@ -109,7 +110,7 @@ const PRESET=[
  {id:"cn",name:"Hộ cận nghèo",fields:[["name","Chủ hộ","text"],["people","Số nhân khẩu","number"],["year","Năm công nhận","number"],["cause","Nguyên nhân / hoàn cảnh","area"],["phone","Số điện thoại","tel"],["note","Ghi chú","area"]],show:["people","year","phone"]}
 ];
 const KEY="bon-rlong-v2",OLD="bon-rlong-lists-v1";
-let sorting=false,view="home";
+let sorting=false,view="home",renaming=false;
 let LISTS=JSON.parse(JSON.stringify(PRESET)),data={dv:[],tq:[],hn:[],cn:[]},cur="dv";
 try{
   const s=localStorage.getItem(KEY);
@@ -150,11 +151,11 @@ async function saveFile(name,data,type){
     if(navigator.canShare({files:[f]})){try{await navigator.share({files:[f]});return true}catch(e){if(e&&e.name==="AbortError")return false}}}}catch(e){}
   try{const a=document.createElement("a");a.href=URL.createObjectURL(bl);a.download=name;document.body.appendChild(a);a.click();a.remove();return true}catch(e){toast("Không lưu được file");return false}
 }
-function tilesHTML(){return LISTS.map(l=>`<div class="tw"><button class="tile${view==="list"&&l.id===cur?" on":""}" data-id="${l.id}"><b>${esc(l.name)}</b><span>${data[l.id].length} mục</span></button><button class="tedit" data-rn="${l.id}" aria-label="Sửa tên">✎</button></div>`).join("")+`<button class="tile add" data-id="+">+ Thêm danh sách</button>`}
-function goList(id){cur=id;view="list";sorting=false;$("sort").textContent="Sắp xếp";$("sort").classList.remove("pri");$("q").disabled=false;$("q").value="";render();scrollTo(0,0)}
+function tilesHTML(){return LISTS.map(l=>`<div class="tw"><button class="tile${view==="list"&&l.id===cur?" on":""}" data-id="${l.id}"><b>${esc(l.name)}</b><span>${data[l.id].length} mục</span></button></div>`).join("")+`<button class="tile add" data-id="+">+ Thêm danh sách</button>`}
+function goList(id){renaming=false;cur=id;view="list";sorting=false;$("sort").textContent="Sắp xếp";$("sort").classList.remove("pri");$("q").disabled=false;$("q").value="";render();scrollTo(0,0)}
 function tileClick(e,d){
-  const rn=e.target.closest("[data-rn]");if(rn){renameList(rn.dataset.rn);return}
   const t=e.target.closest(".tile");if(!t)return;
+  if(renaming&&t.dataset.id!=="+"){renameList(t.dataset.id);return}
   if(d)d.close();
   if(t.dataset.id==="+")newList();else goList(t.dataset.id)}
 function renameList(id){
@@ -166,7 +167,7 @@ function renameList(id){
   $("dlg").showModal();setTimeout(()=>{const i=$("rn");i.focus();i.select()},60)}
 function render(){
   fix();
-  $("homeV").hidden=view!=="home";$("listV").hidden=view!=="list";$("add").hidden=view!=="list";$("cols").hidden=$("csv").hidden=view!=="list";
+  $("homeV").hidden=view!=="home";$("listV").hidden=view!=="list";$("add").hidden=view!=="list";$("ren").hidden=view!=="home";$("ren").textContent=renaming?"Xong":"Sửa tên";$("ren").classList.toggle("pri",renaming);$("rnhint").hidden=!renaming;$("hgrid").classList.toggle("renaming",renaming);$("cols").hidden=$("csv").hidden=view!=="list";
   if(view==="home"){$("hgrid").innerHTML=tilesHTML();return}
   const cl=L();$("curname").textContent=cl.name;$("curcount").textContent=data[cl.id].length+" mục";
   const l=L(),q=$("q").value.trim().toLowerCase(),main=l.fields[0][0];
@@ -285,11 +286,12 @@ $("sort").onclick=()=>{sorting=!sorting;$("sort").textContent=sorting?"Xong":"S�
 function openMenu(){
   const d=$("mdlg");
   d.innerHTML=`<div class="in"><h1>Danh sách</h1><div class="grid">${tilesHTML()}</div><button class="btn" id="gh" style="width:100%;margin-top:14px">‹ Về trang chủ</button></div>`;
-  $("gh").onclick=()=>{d.close();view="home";render()};
+  $("gh").onclick=()=>{d.close();view="home";renaming=false;render()};
   d.onclick=e=>{if(e.target===d){d.close();return}tileClick(e,d)};
   if(!d.open)d.showModal()}
 $("hgrid").onclick=e=>tileClick(e,null);
-$("home").onclick=()=>{view="home";render();scrollTo(0,0)};
+$("home").onclick=()=>{view="home";renaming=false;render();scrollTo(0,0)};
+$("ren").onclick=()=>{renaming=!renaming;render()};
 $("menu").onclick=openMenu;
 $("add").onclick=()=>open(null);
 $("cols").onclick=openCols;
