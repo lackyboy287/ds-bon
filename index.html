@@ -8,8 +8,8 @@
 <meta name="theme-color" content="#a4161a">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
-<meta name="apple-mobile-web-app-title" content="Danh sách Bon">
-<title>Quản lý danh sách Bon R Lông</title>
+<meta name="apple-mobile-web-app-title" content="Quản lý Bon">
+<title>Phần mềm quản lý Bon R Lông</title>
 <style>
 :root{--bg:#f4f5f7;--card:#fff;--ink:#1b2430;--mute:#6b7685;--line:#dfe3e9;--red:#a4161a;--redink:#fff;--chip:#e9ecf1;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
 @media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#12161c;--card:#1b212a;--ink:#eef1f5;--mute:#9aa5b4;--line:#2d3541;--red:#e0494d;--redink:#fff;--chip:#262d38}}
@@ -46,6 +46,8 @@ label{display:block;font-size:13px;color:var(--mute);margin:10px 0 4px}
 .head{display:flex;align-items:center;gap:12px;margin:8px 0}
 .burger{flex:none;width:44px;height:44px;padding:0;display:grid;place-items:center}
 .burger i{display:block;width:20px;height:2px;background:currentColor;box-shadow:0 -6px currentColor,0 6px currentColor}
+.item.sorting{display:flex;gap:10px;align-items:center}.ib{flex:1;min-width:0}
+.mv{display:flex;flex-direction:column;gap:6px}.mv .btn{width:46px;height:38px;padding:0;font-size:16px}
 .head h2{margin:0;font-size:18px;line-height:1.2}.head small{color:var(--mute);font-size:13px}
 #mdlg{margin:0;height:100%;max-height:100%;width:min(88vw,380px);border-radius:0 18px 18px 0;overflow:auto}
 #mdlg .in{padding:calc(16px + env(safe-area-inset-top,0px)) 16px 16px}
@@ -67,9 +69,9 @@ label{display:block;font-size:13px;color:var(--mute);margin:10px 0 4px}
 </head>
 <body>
 <div class="wrap">
-  <h1>Danh sách Bon R Lông</h1>
+  <h1>Phần mềm quản lý Bon R Lông</h1>
   <p class="sub">Dữ liệu chỉ lưu trong máy này. Nhớ bấm “Sao lưu” định kỳ.</p>
-  <div class="head"><button class="btn burger" id="menu" aria-label="Mở danh sách"><i></i></button><div><h2 id="curname"></h2><small id="curcount"></small></div></div>
+  <div class="head"><button class="btn burger" id="menu" aria-label="Mở danh sách"><i></i></button><div><h2 id="curname"></h2><small id="curcount"></small></div><button class="btn" id="sort" style="margin-left:auto">Sắp xếp</button></div>
   <div class="bar"><input id="q" class="srch" type="search" placeholder="Tìm kiếm theo tên, SĐT, ghi chú…" aria-label="Tìm kiếm"></div>
   <div id="list"></div>
   <div class="foot">
@@ -92,6 +94,7 @@ const PRESET=[
  {id:"cn",name:"Hộ cận nghèo",fields:[["name","Chủ hộ","text"],["people","Số nhân khẩu","number"],["year","Năm công nhận","number"],["cause","Nguyên nhân / hoàn cảnh","area"],["phone","Số điện thoại","tel"],["note","Ghi chú","area"]],show:["people","year","phone"]}
 ];
 const KEY="bon-rlong-v2",OLD="bon-rlong-lists-v1";
+let sorting=false;
 let LISTS=JSON.parse(JSON.stringify(PRESET)),data={dv:[],tq:[],hn:[],cn:[]},cur="dv";
 try{
   const s=localStorage.getItem(KEY);
@@ -127,16 +130,19 @@ async function prep(file){
 async function saveFile(name,data,type){
   try{if(window.claude&&claude.use){const d=await claude.use("downloads");if(d){await d.save({filename:name,data});return true}}}
   catch(e){if(e&&e.code==="declined")return false;if(e&&e.code==="rejected_extension"){toast("Định dạng này chưa lưu được từ đây");return false}}
-  try{const a=document.createElement("a");a.href=URL.createObjectURL(data instanceof Blob?data:new Blob([data],{type}));a.download=name;document.body.appendChild(a);a.click();a.remove();return true}catch(e){toast("Không lưu được file");return false}
+  const bl=data instanceof Blob?data:new Blob([data],{type});
+  try{if(navigator.canShare&&navigator.share){const f=new File([bl],name,{type:bl.type||type||"application/octet-stream"});
+    if(navigator.canShare({files:[f]})){try{await navigator.share({files:[f]});return true}catch(e){if(e&&e.name==="AbortError")return false}}}}catch(e){}
+  try{const a=document.createElement("a");a.href=URL.createObjectURL(bl);a.download=name;document.body.appendChild(a);a.click();a.remove();return true}catch(e){toast("Không lưu được file");return false}
 }
 function render(){
   fix();
   const cl=L();$("curname").textContent=cl.name;$("curcount").textContent=data[cl.id].length+" mục";
   const l=L(),q=$("q").value.trim().toLowerCase(),main=l.fields[0][0];
-  const rows=data[l.id].filter(r=>!q||Object.values(r).map(v=>Array.isArray(v)?v.map(a=>a.name).join(" "):v).join(" ").toLowerCase().includes(q));
+  const rows=data[l.id].filter(r=>sorting||!q||Object.values(r).map(v=>Array.isArray(v)?v.map(a=>a.name).join(" "):v).join(" ").toLowerCase().includes(q));
   if(!rows.length){$("list").innerHTML=`<div class="empty">${q?"Không tìm thấy kết quả.":"Chưa có ai trong danh sách. Bấm “+ Thêm” để nhập."}</div>`;return}
   const F=Object.fromEntries(l.fields.map(f=>[f[0],f]));
-  $("list").innerHTML=rows.map(r=>`<div class="item" data-i="${r.id}"><h3>${esc(r[main])}</h3><div class="meta">${l.fields.filter(f=>l.show.includes(f[0])&&hv(f,r)).map(f=>`<span>${esc(f[1])}: <b>${esc(fmt(f[2],r[f[0]]))}</b></span>`).join("")}</div></div>`).join("")
+  $("list").innerHTML=rows.map(r=>`<div class="item${sorting?" sorting":""}" data-i="${r.id}"><div class="ib"><h3>${esc(r[main])}</h3><div class="meta">${l.fields.filter(f=>l.show.includes(f[0])&&hv(f,r)).map(f=>`<span>${esc(f[1])}: <b>${esc(fmt(f[2],r[f[0]]))}</b></span>`).join("")}</div></div>${sorting?`<div class="mv"><button class="btn" data-m="-1" aria-label="Đưa lên">▲</button><button class="btn" data-m="1" aria-label="Đưa xuống">▼</button></div>`:""}</div>`).join("")
 }
 function ask(msg,ok="Xóa"){return new Promise(res=>{const d=$("cdlg");d.innerHTML=`<form method="dialog" style="padding:16px"><p>${esc(msg)}</p><div class="row"><button class="btn" value="no">Hủy</button><button class="btn pri" value="yes">${ok}</button></div></form>`;d.returnValue="";d.onclose=()=>res(d.returnValue==="yes");d.showModal()})}
 function open(id){
@@ -214,7 +220,12 @@ function newList(){
     LISTS.push($("nk").value==="d"?{id,name:n,fields:[["name","Tên tài liệu","text"],["date","Ngày","date"],["kind","Loại (nghị quyết, biên bản, ảnh…)","text"],["files","Ảnh / tệp đính kèm","file"],["note","Ghi chú","area"]],show:["date","kind","files"]}:{id,name:n,fields:[["name","Họ và tên","text"],["phone","Số điện thoại","tel"],["note","Ghi chú","area"]],show:["phone"]});
     data[id]=[];cur=id;save();render();$("dlg").close();openCols()};
   $("dlg").showModal();setTimeout(()=>$("nl").focus(),60)}
-$("list").onclick=e=>{const i=e.target.closest(".item");if(i)open(i.dataset.i)};
+$("list").onclick=e=>{const i=e.target.closest(".item");if(!i)return;
+  const m=e.target.closest("[data-m]");
+  if(m){const a=data[cur],k=a.findIndex(x=>x.id===i.dataset.i),j=k+(+m.dataset.m);
+    if(k<0||j<0||j>=a.length)return;[a[k],a[j]]=[a[j],a[k]];save();render();return}
+  if(!sorting)open(i.dataset.i)};
+$("sort").onclick=()=>{sorting=!sorting;$("sort").textContent=sorting?"Xong":"Sắp xếp";$("sort").classList.toggle("pri",sorting);$("q").disabled=sorting;render()};
 function openMenu(){
   const d=$("mdlg");
   d.innerHTML=`<div class="in"><h1>Danh sách</h1><div class="grid">`+LISTS.map(l=>`<button class="tile${l.id===cur?" on":""}" data-id="${l.id}"><b>${esc(l.name)}</b><span>${data[l.id].length} mục</span></button>`).join("")+`<button class="tile add" data-id="+">+ Thêm danh sách</button></div></div>`;

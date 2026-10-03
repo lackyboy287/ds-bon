@@ -1,6 +1,6 @@
 {
-  "name": "Danh sách Bon R Lông",
-  "short_name": "Danh sách Bon",
+  "name": "Phần mềm quản lý Bon R Lông",
+  "short_name": "Quản lý Bon",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
