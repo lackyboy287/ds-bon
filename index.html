@@ -80,6 +80,10 @@ label{display:block;font-size:13px;color:var(--mute);margin:10px 0 4px}
 .vtxt{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;margin:0}
 .vdoc{line-height:1.65;font-size:16px;overflow-wrap:anywhere}.vdoc p{margin:0 0 .8em}.vdoc img{max-width:100%;height:auto}
 .vdoc table{border-collapse:collapse;display:block;max-width:100%;overflow-x:auto}.vdoc td,.vdoc th{border:1px solid var(--line);padding:4px 8px;vertical-align:top}
+.mc{border:1px solid var(--line);border-radius:12px;padding:10px;margin:8px 0;background:var(--card)}
+.mh{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}.mh .btn{padding:6px 10px;font-size:13px}
+.mg{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px}.mc input{padding:9px 10px;font-size:15px}
+.mv2{padding:8px 0;border-top:1px dashed var(--line)}.mv2:first-of-type{border-top:0}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:90px;background:var(--ink);color:var(--bg);padding:8px 14px;border-radius:10px;font-size:14px;display:none}
 </style>
 </head>
@@ -104,6 +108,7 @@ label{display:block;font-size:13px;color:var(--mute);margin:10px 0 4px}
     <button class="btn" id="csv">Xuất Excel (CSV)</button>
     <button class="btn" id="imp">Khôi phục</button>
     <button class="btn" id="ren">Sửa tên</button>
+    <button class="btn" id="impw">Nhập từ Word</button><input type="file" id="fw" accept=".docx" hidden>
     <input type="file" id="file" accept=".json,application/json" hidden>
   </div>
 </div>
@@ -132,8 +137,8 @@ function fix(){LISTS.forEach(l=>{if(!data[l.id])data[l.id]=[]});if(!LISTS.some(l
 function save(){try{localStorage.setItem(KEY,JSON.stringify({v:2,schema:LISTS,data}))}catch(e){toast("Không lưu được vào máy, hãy sao lưu ngay")}}
 function toast(t){const e=$("toast");e.textContent=t;e.style.display="block";clearTimeout(toast.t);toast.t=setTimeout(()=>e.style.display="none",2200)}
 function esc(s){return String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
-function fmt(t,v){if(t==="file")return Array.isArray(v)?v.length+" tệp":"";return t==="date"&&v?v.split("-").reverse().join("/"):v}
-const hv=(f,r)=>{const v=r[f[0]];return f[2]==="file"?v&&v.length:v};
+function fmt(t,v){if(t==="members")return Array.isArray(v)?v.length+" thành viên":"";if(t==="file")return Array.isArray(v)?v.length+" tệp":"";return t==="date"&&v?v.split("-").reverse().join("/"):v}
+const hv=(f,r)=>{const v=r[f[0]];return f[2]==="file"||f[2]==="members"?v&&v.length:v};
 const fsize=n=>n>1e6?(n/1e6).toFixed(1)+" MB":Math.max(1,Math.round(n/1e3))+" KB";
 let _db;
 function idb(){return _db||(_db=new Promise((res,rej)=>{try{const r=indexedDB.open("bon-rlong-files",1);r.onupgradeneeded=()=>r.result.createObjectStore("f",{keyPath:"id"});r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)}catch(e){rej(e)}}))}
@@ -176,11 +181,11 @@ function renameList(id){
   $("dlg").showModal();setTimeout(()=>{const i=$("rn");i.focus();i.select()},60)}
 function render(){
   fix();
-  $("homeV").hidden=view!=="home";$("listV").hidden=view!=="list";$("add").hidden=view!=="list";$("ren").hidden=view!=="home";$("ren").textContent=renaming?"Xong":"Sửa tên";$("ren").classList.toggle("pri",renaming);$("rnhint").hidden=!renaming;$("hgrid").classList.toggle("renaming",renaming);$("cols").hidden=$("csv").hidden=view!=="list";
+  $("homeV").hidden=view!=="home";$("listV").hidden=view!=="list";$("add").hidden=view!=="list";$("ren").hidden=view!=="home";$("ren").textContent=renaming?"Xong":"Sửa tên";$("ren").classList.toggle("pri",renaming);$("rnhint").hidden=!renaming;$("hgrid").classList.toggle("renaming",renaming);$("cols").hidden=$("csv").hidden=view!=="list";$("impw").hidden=!(view==="list"&&L().fields.some(f=>f[2]==="members"));
   if(view==="home"){$("hgrid").innerHTML=tilesHTML();return}
   const cl=L();$("curname").textContent=cl.name;$("curcount").textContent=data[cl.id].length+" mục";
   const l=L(),q=$("q").value.trim().toLowerCase(),main=l.fields[0][0];
-  const rows=data[l.id].filter(r=>sorting||!q||Object.values(r).map(v=>Array.isArray(v)?v.map(a=>a.name).join(" "):v).join(" ").toLowerCase().includes(q));
+  const rows=data[l.id].filter(r=>sorting||!q||Object.values(r).map(v=>Array.isArray(v)?v.map(a=>Object.values(a).join(" ")).join(" "):v).join(" ").toLowerCase().includes(q));
   if(!rows.length){$("list").innerHTML=`<div class="empty">${q?"Không tìm thấy kết quả.":"Chưa có ai trong danh sách. Bấm “+ Thêm” để nhập."}</div>`;return}
   const F=Object.fromEntries(l.fields.map(f=>[f[0],f]));
   $("list").innerHTML=rows.map(r=>`<div class="item${sorting?" sorting":""}" data-i="${r.id}"><div class="ib"><h3>${esc(r[main])}</h3><div class="meta">${l.fields.filter(f=>l.show.includes(f[0])&&hv(f,r)).map(f=>`<span>${esc(f[1])}: <b>${esc(fmt(f[2],r[f[0]]))}</b></span>`).join("")}</div></div>${sorting?`<div class="mv"><button class="btn" data-m="-1" aria-label="Đưa lên">▲</button><button class="btn" data-m="1" aria-label="Đưa xuống">▼</button></div>`:""}</div>`).join("")
@@ -220,9 +225,46 @@ function pasteDlg(l){
       l.fields.push([k,lab,/dien thoai|sdt/.test(norm(lab))?"tel":"text"]);vals[k]=val});save();finish(vals)};
     if($("po"))$("po").onclick=()=>finish(vals)};
   d.showModal();setTimeout(()=>$("pt").focus(),60)}
+const MEMF=[["name","Họ và tên"],["rel","Quan hệ"],["birth","Ngày sinh"],["gender","Giới tính"],["eth","Dân tộc"],["cccd","CCCD / Định danh"],["phone","Số điện thoại"]];
+const HOUSE=[["name","Họ và tên chủ hộ","text"],["birth","Ngày sinh","text"],["gender","Giới tính","text"],["cccd","CCCD / Định danh","text"],["eth","Dân tộc","text"],["place","Thôn / Tổ","text"],["cls","Phân loại hộ","text"],["phone","Số điện thoại","tel"],["mem","Thành viên trong hộ","members"],["note","Ghi chú","area"]];
+const HSHOW=["cls","phone","mem"];
+const MEMHTML=(k,n)=>`<label>${esc(n)}</label><div data-mk="${k}"></div><button type="button" class="btn" style="width:100%;margin-top:6px" data-madd="${k}">+ Thêm thành viên</button>`;
+const memView=m=>`<div class="mv2"><b>${esc(m.name||"(chưa có tên)")}</b>${m.rel?` · ${esc(m.rel)}`:""}<div class="sub" style="margin:2px 0 0">${[m.birth,m.gender,m.eth].filter(Boolean).map(esc).join(" · ")}${m.cccd?`<br>CCCD: ${esc(m.cccd)}`:""}${m.phone?`<br>ĐT: <a href="tel:${esc(String(m.phone).replace(/[^\d+]/g,""))}" style="color:var(--red)">${esc(m.phone)}</a>`:""}</div></div>`;
+const HMAP=[["quan he","rel"],["thanh vien","mem"],["chu ho","head"],["sinh","birth"],["gioi tinh","gender"],["cccd","cccd"],["dinh danh","cccd"],["thon","place"],["dan toc","eth"],["phan loai","cls"],["dien thoai","phone"]];
+function parseHouseholds(html){
+  const doc=new DOMParser().parseFromString(html,"text/html"),H=[];let cur=null;
+  doc.querySelectorAll("table").forEach(tb=>{let col=null;
+    tb.querySelectorAll("tr").forEach(tr=>{
+      const c=[...tr.children].map(x=>x.textContent.replace(/\s+/g," ").trim()),hm={};
+      c.forEach((x,i)=>{const n=norm(x),m=HMAP.find(([k])=>n.includes(k));if(m&&hm[m[1]]===undefined)hm[m[1]]=i});
+      if(hm.head!==undefined&&hm.mem!==undefined){col=hm;return}
+      if(!col)return;
+      const g=k=>col[k]===undefined?"":(c[col[k]]||"");
+      if(g("head")){cur={name:g("head"),birth:g("birth"),gender:g("gender"),cccd:g("cccd"),eth:g("eth"),place:g("place"),cls:g("cls"),phone:g("phone"),mem:[]};H.push(cur)}
+      else if(g("mem")&&cur)cur.mem.push({name:g("mem"),rel:g("rel"),birth:g("birth"),gender:g("gender"),eth:g("eth"),cccd:g("cccd"),phone:g("phone")})});
+  });
+  return H}
+async function importWord(file){
+  const l=L(),mf=l.fields.find(f=>f[2]==="members");if(!mf){toast("Danh sách này chưa có cột Thành viên");return}
+  toast("Đang đọc file Word…");let H;
+  try{await loadMammoth();const r=await mammoth.convertToHtml({arrayBuffer:await file.arrayBuffer()});H=parseHouseholds(r.value)}catch(e){toast("Không đọc được file (cần đuôi .docx)");return}
+  if(!H.length){toast("Không thấy bảng hộ gia đình trong file");return}
+  const cls=[...new Set(H.map(h=>h.cls||"__"))],people=H.reduce((a,h)=>a+1+h.mem.length,0),d=$("cdlg"),main=l.fields[0][0];d.onclose=null;
+  d.innerHTML=`<form method="dialog" style="padding:16px"><h1>Nhập từ Word</h1><p>Tìm thấy <b>${H.length}</b> hộ, <b>${people}</b> người (tính cả chủ hộ).</p><label for="ic">Chỉ nhập hộ thuộc loại</label><select id="ic"><option value="*">Tất cả</option>${cls.map(c=>`<option value="${esc(c)}">${c==="__"?"(chưa ghi loại)":esc(c)}</option>`).join("")}</select><div class="row"><button class="btn" value="no">Hủy</button><button type="button" class="btn pri" id="ig">Nhập</button></div></form>`;
+  $("ig").onclick=()=>{const sel=$("ic").value;let add=0,skip=0;
+    H.filter(h=>sel==="*"||(h.cls||"__")===sel).forEach(h=>{
+      if(data[l.id].some(r=>(h.cccd&&r.cccd&&r.cccd===h.cccd)||(r[main]===h.name&&r.birth===h.birth))){skip++;return}
+      const rec={id:Date.now().toString(36)+Math.random().toString(36).slice(2,6)};
+      rec[main]=h.name;["birth","gender","cccd","eth","place","cls","phone"].forEach(k=>{if(l.fields.some(f=>f[0]===k))rec[k]=h[k]});
+      rec[mf[0]]=h.mem;data[l.id].push(rec);add++});
+    save();render();d.close();toast("Đã nhập "+add+" hộ"+(skip?", bỏ qua "+skip+" hộ đã có":""))};
+  d.showModal()}
 function open(id,init){
   const l=L(),r=data[l.id].find(x=>x.id===id)||init||{},main=l.fields[0][0],att={},gone=[];let curK=null;
-  l.fields.forEach(f=>{if(f[2]==="file")att[f[0]]=(r[f[0]]||[]).map(a=>({...a}))});
+  const mem={};
+  l.fields.forEach(f=>{if(f[2]==="file")att[f[0]]=(r[f[0]]||[]).map(a=>({...a}));else if(f[2]==="members")mem[f[0]]=(r[f[0]]||[]).map(m=>({...m}))});
+  function drawMem(k){const box=document.querySelector(`[data-mk="${k}"]`);if(!box)return;
+    box.innerHTML=mem[k].map((m,i)=>`<div class="mc"><div class="mh"><b>Thành viên ${i+1}</b><button type="button" class="btn del" data-mdel="${i}" data-kk="${k}">Xóa</button></div><input data-mi="${i}" data-mf="name" data-kk="${k}" placeholder="Họ và tên" aria-label="Họ và tên" value="${esc(m.name)}" style="width:100%"><div class="mg">${MEMF.slice(1).map(([f,n])=>`<input data-mi="${i}" data-mf="${f}" data-kk="${k}" placeholder="${n}" aria-label="${n}" value="${esc(m[f])}"${f==="phone"?' type="tel"':""}>`).join("")}</div></div>`).join("")}
   const isImg=a=>a.type.startsWith("image/");
   const blobOf=async a=>a.blob||((await fget(a.id))||{}).blob;
   async function drawAtt(k){
@@ -230,15 +272,18 @@ function open(id,init){
     box.innerHTML=att[k].map(a=>`<div class="at"><div class="th" data-th="${a.id}">${isImg(a)?"":"📄"}</div><div class="an"><b>${esc(a.name)}</b><span>${fsize(a.size)}</span></div><button type="button" class="btn" data-av="${a.id}" data-kk="${k}">Xem</button><button type="button" class="btn del" data-ax="${a.id}" data-kk="${k}">Xóa</button></div>`).join("");
     for(const a of att[k])if(isImg(a)){const bl=await blobOf(a),el=box.querySelector(`[data-th="${a.id}"]`);if(bl&&el){const im=new Image();im.src=URL.createObjectURL(bl);el.appendChild(im)}}
   }
-  $("f").innerHTML=`<h1>${id?"Sửa":"Thêm"} · ${esc(l.name)}</h1>`+(id?"":`<button type="button" class="btn" style="width:100%;margin-top:4px" data-paste="1">📋 Dán thông tin từ ảnh / tin nhắn</button>`)+l.fields.map(([k,n,t])=>t==="file"?`<label>${esc(n)}</label><div data-ak="${k}"></div><button type="button" class="btn" style="width:100%;margin-top:6px" data-aa="${k}">+ Thêm ảnh / tài liệu</button>`:`<label for="f_${k}">${esc(n)}</label>`+(t==="area"?`<textarea id="f_${k}" name="${k}" rows="3">${esc(r[k])}</textarea>`:`<input id="f_${k}" name="${k}" type="${t}" ${t==="number"?'inputmode="numeric"':""} value="${esc(r[k])}" ${k===main?"required":""}>`)).join("")+
+  $("f").innerHTML=`<h1>${id?"Sửa":"Thêm"} · ${esc(l.name)}</h1>`+(id?"":`<button type="button" class="btn" style="width:100%;margin-top:4px" data-paste="1">📋 Dán thông tin từ ảnh / tin nhắn</button>`)+l.fields.map(([k,n,t])=>t==="members"?MEMHTML(k,n):t==="file"?`<label>${esc(n)}</label><div data-ak="${k}"></div><button type="button" class="btn" style="width:100%;margin-top:6px" data-aa="${k}">+ Thêm ảnh / tài liệu</button>`:`<label for="f_${k}">${esc(n)}</label>`+(t==="area"?`<textarea id="f_${k}" name="${k}" rows="3">${esc(r[k])}</textarea>`:`<input id="f_${k}" name="${k}" type="${t}" ${t==="number"?'inputmode="numeric"':""} value="${esc(r[k])}" ${k===main?"required":""}>`)).join("")+
   `<input type="file" id="fi" multiple hidden accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"><div class="row"><button type="button" class="btn" id="x">Hủy</button>${id?'<button type="button" class="btn del" id="d">Xóa</button>':""}<button class="btn pri" type="submit">Lưu</button></div>`;
   $("dlg").showModal();
-  Object.keys(att).forEach(drawAtt);
+  Object.keys(att).forEach(drawAtt);Object.keys(mem).forEach(drawMem);
+  $("f").oninput=e=>{const t=e.target;if(t.dataset.mi!==undefined)mem[t.dataset.kk][+t.dataset.mi][t.dataset.mf]=t.value};
   $("x").onclick=()=>$("dlg").close();
   if(id)$("d").onclick=async()=>{if(await ask("Xóa mục này (kể cả ảnh, tài liệu đính kèm)?")){try{await rmFiles(l,r)}catch(e){}data[l.id]=data[l.id].filter(x=>x.id!==id);save();render();$("dlg").close()}};
   $("f").onclick=async e=>{
     const t=e.target.closest("button");if(!t)return;
     if(t.dataset.paste){pasteDlg(l);return}
+    if(t.dataset.madd){const k=t.dataset.madd;mem[k].push({});drawMem(k);const ins=document.querySelectorAll(`[data-mk="${k}"] [data-mf="name"]`);ins[ins.length-1].focus();return}
+    if(t.dataset.mdel!==undefined){mem[t.dataset.kk].splice(+t.dataset.mdel,1);drawMem(t.dataset.kk);return}
     if(t.dataset.aa){curK=t.dataset.aa;$("fi").click();return}
     const k=t.dataset.kk,i=k?att[k].findIndex(a=>a.id===(t.dataset.av||t.dataset.ax)):-1;if(i<0)return;const a=att[k][i];
     if(t.dataset.ax){att[k].splice(i,1);if(!a.blob)gone.push(a.id);drawAtt(k);return}
@@ -249,12 +294,13 @@ function open(id,init){
       try{att[curK].push(await prep(f))}catch(err){toast("Không đọc được "+f.name)}}
     drawAtt(curK)};
   $("f").onsubmit=async e=>{e.preventDefault();const o=Object.fromEntries(new FormData($("f")));
+    for(const k in mem)o[k]=mem[k].filter(m=>Object.values(m).some(v=>String(v).trim()));
     try{for(const k in att){for(const a of att[k])if(a.blob)await fput({id:a.id,name:a.name,type:a.type,blob:a.blob});o[k]=att[k].map(({id,name,type,size})=>({id,name,type,size}))}
       for(const g of gone)await fdel(g)}catch(err){toast("Không lưu được tệp đính kèm, thử lại");return}
     if(id){Object.assign(r,o)}else{o.id=Date.now().toString(36)+Math.random().toString(36).slice(2,5);data[l.id].push(o)}
     save();render();$("dlg").close();toast("Đã lưu")}
 }
-const TYPES=[["text","Chữ và số (gõ tự do, có / - .)"],["number","Chỉ số (bàn phím số)"],["date","Chọn ngày từ lịch"],["tel","Số điện thoại"],["area","Ghi chú dài (nhiều dòng)"],["file","Đính kèm ảnh / tài liệu"]];
+const TYPES=[["text","Chữ và số (gõ tự do, có / - .)"],["number","Chỉ số (bàn phím số)"],["date","Chọn ngày từ lịch"],["tel","Số điện thoại"],["area","Ghi chú dài (nhiều dòng)"],["file","Đính kèm ảnh / tài liệu"],["members","Danh sách thành viên (hộ gia đình)"]];
 const typeOpts=v=>TYPES.map(t=>`<option value="${t[0]}"${t[0]===v?" selected":""}>${t[1]}</option>`).join("");
 function openCols(){
   const l=L(),w=l.fields.map(f=>[...f]),show=new Set(l.show),name={v:l.name};
@@ -268,11 +314,14 @@ function openCols(){
     `<label>Các cột (tick “Hiện” để hiện trên thẻ, chọn kiểu ở dòng dưới)</label>`+
     w.map((f,i)=>`<div class="cbox"><div class="crow"><input data-n="${i}" value="${esc(f[1])}" aria-label="Tên cột"><label class="chk"><input type="checkbox" data-s="${i}" ${show.has(f[0])?"checked":""}>Hiện</label>${i?`<button type="button" class="btn del" data-d="${i}">Xóa</button>`:""}</div><select data-t="${i}" aria-label="Kiểu dữ liệu">${typeOpts(f[2])}</select></div>`).join("")+
     `<label>Thêm cột mới</label><div class="crow"><input id="nn" placeholder="Ví dụ: Địa chỉ tổ"><select id="nt" aria-label="Kiểu dữ liệu">${typeOpts("text")}</select></div>`+
-    `<button type="button" class="btn" id="na" style="width:100%">+ Thêm cột</button>`+
+    `<button type="button" class="btn" id="na" style="width:100%">+ Thêm cột</button><button type="button" class="btn" id="hm" style="width:100%;margin-top:8px">Dùng mẫu Hộ gia đình (có thành viên)</button>`+
     `<div class="row"><button type="button" class="btn del" id="dl">Xóa danh sách</button><button type="button" class="btn" id="x">Hủy</button><button type="button" class="btn pri" id="ok">Xong</button></div>`;
     $("x").onclick=()=>$("dlg").close();
     $("na").onclick=()=>{sync();const n=$("nn").value.trim(),t=$("nt").value;if(!n){$("nn").focus();return}
       const k="c_"+Date.now().toString(36);w.push([k,n,t]);if(t!=="area")show.add(k);draw()};
+    $("hm").onclick=()=>{sync();
+      if(!data[l.id].length){w.length=0;HOUSE.forEach(f=>w.push([...f]));show.clear();HSHOW.forEach(k=>show.add(k))}
+      else HOUSE.forEach(f=>{if(!w.some(x=>x[0]===f[0]))w.push([...f])});draw()};
     $("dl").onclick=async()=>{if(LISTS.length<2){toast("Phải giữ lại ít nhất 1 danh sách");return}
       if(await ask("Xóa danh sách “"+l.name+"” và toàn bộ "+data[l.id].length+" mục trong đó?")){
         for(const rc of data[l.id]){try{await rmFiles(l,rc)}catch(e){}}LISTS=LISTS.filter(x=>x.id!==l.id);delete data[l.id];cur=LISTS[0].id;view="home";save();render();$("dlg").close()}};
@@ -286,11 +335,11 @@ function openCols(){
 const download=(n,t,ty)=>saveFile(n,t,ty);
 function newList(){
   $("f").onclick=null;
-  $("f").innerHTML=`<h1>Danh sách mới</h1><label for="nl">Tên danh sách</label><input id="nl" placeholder="Ví dụ: Tổ vay vốn" required><label for="nk">Loại danh sách</label><select id="nk"><option value="p">Danh sách người / hộ</option><option value="d">Tài liệu &amp; hình ảnh (có đính kèm)</option></select><div class="row"><button type="button" class="btn" id="x">Hủy</button><button class="btn pri" type="submit">Tạo</button></div>`;
+  $("f").innerHTML=`<h1>Danh sách mới</h1><label for="nl">Tên danh sách</label><input id="nl" placeholder="Ví dụ: Tổ vay vốn" required><label for="nk">Loại danh sách</label><select id="nk"><option value="p">Danh sách người / hộ</option><option value="h">Hộ gia đình (chủ hộ + thành viên)</option><option value="d">Tài liệu &amp; hình ảnh (có đính kèm)</option></select><div class="row"><button type="button" class="btn" id="x">Hủy</button><button class="btn pri" type="submit">Tạo</button></div>`;
   $("x").onclick=()=>$("dlg").close();
   $("f").onsubmit=e=>{e.preventDefault();const n=$("nl").value.trim();if(!n)return;
     const id="l_"+Date.now().toString(36);
-    LISTS.push($("nk").value==="d"?{id,name:n,fields:[["name","Tên tài liệu","text"],["date","Ngày","date"],["kind","Loại (nghị quyết, biên bản, ảnh…)","text"],["files","Ảnh / tệp đính kèm","file"],["note","Ghi chú","area"]],show:["date","kind","files"]}:{id,name:n,fields:[["name","Họ và tên","text"],["phone","Số điện thoại","tel"],["note","Ghi chú","area"]],show:["phone"]});
+    LISTS.push($("nk").value==="h"?{id,name:n,fields:HOUSE.map(f=>[...f]),show:[...HSHOW]}:$("nk").value==="d"?{id,name:n,fields:[["name","Tên tài liệu","text"],["date","Ngày","date"],["kind","Loại (nghị quyết, biên bản, ảnh…)","text"],["files","Ảnh / tệp đính kèm","file"],["note","Ghi chú","area"]],show:["date","kind","files"]}:{id,name:n,fields:[["name","Họ và tên","text"],["phone","Số điện thoại","tel"],["note","Ghi chú","area"]],show:["phone"]});
     data[id]=[];cur=id;view="list";save();render();$("dlg").close();openCols()};
   $("dlg").showModal();setTimeout(()=>$("nl").focus(),60)}
 const extOf=n=>(String(n).split(".").pop()||"").toLowerCase();
@@ -319,6 +368,7 @@ function viewItem(id){
   const l=L(),r=data[l.id].find(x=>x.id===id);if(!r)return;
   const main=l.fields[0][0],fk=[];let h=`<h1>${esc(r[main])}</h1>`,calls="",any=false;
   l.fields.slice(1).forEach(([k,n,t])=>{const v=r[k];
+    if(t==="members"){if(v&&v.length){any=true;h+=`<div class="vr"><span>${esc(n)} (${v.length})</span>${v.map(memView).join("")}</div>`}return}
     if(t==="file"){if(v&&v.length){any=true;fk.push(k);h+=`<div class="vr"><span>${esc(n)}</span><div data-vk="${k}"></div></div>`}return}
     if(!v)return;any=true;
     h+=`<div class="vr"><span>${esc(n)}</span><b>${esc(fmt(t,v))}</b></div>`;
@@ -361,8 +411,14 @@ $("bk").onclick=async()=>{toast("Đang chuẩn bị file sao lưu…");let files
   try{files=await Promise.all((await fall()).map(async f=>({id:f.id,name:f.name,type:f.type,b64:await b64(f.blob)})))}catch(e){}
   await saveFile("sao-luu-bon-"+new Date().toISOString().slice(0,10)+".json",JSON.stringify({v:3,schema:LISTS,data,files}),"application/json")};
 $("csv").onclick=()=>{const l=L(),q=s=>'"'+String(s??"").replace(/"/g,'""')+'"';
-  const t=[l.fields.map(f=>q(f[1])).join(",")].concat(data[l.id].map(r=>l.fields.map(f=>q(Array.isArray(r[f[0]])?r[f[0]].map(a=>a.name).join("; "):r[f[0]])).join(","))).join("\r\n");
-  download(l.name+".csv","\ufeff"+t,"text/csv;charset=utf-8")};
+  const mf=l.fields.find(f=>f[2]==="members"),base=l.fields.filter(f=>f!==mf);
+  const val=(r,f)=>Array.isArray(r[f[0]])?r[f[0]].map(a=>a.name).join("; "):r[f[0]];
+  const head=base.map(f=>q(f[1])).concat(mf?MEMF.map(m=>q(m[1]+" (thành viên)")):[]),rows=[];
+  data[l.id].forEach(r=>{rows.push(base.map(f=>q(val(r,f))).concat(mf?MEMF.map(()=>q("")):[]).join(","));
+    if(mf)(r[mf[0]]||[]).forEach(m=>rows.push(base.map((f,i)=>q(i===0?r[f[0]]:"")).concat(MEMF.map(x=>q(m[x[0]]))).join(",")))});
+  download(l.name+".csv","\ufeff"+[head.join(",")].concat(rows).join("\r\n"),"text/csv;charset=utf-8")};
+$("impw").onclick=()=>$("fw").click();
+$("fw").onchange=e=>{const f=e.target.files[0];e.target.value="";if(f)importWord(f)};
 $("imp").onclick=()=>$("file").click();
 $("file").onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();
   r.onload=async()=>{try{const d=JSON.parse(r.result);if(!(await ask("Khôi phục sẽ thay thế toàn bộ dữ liệu hiện tại. Tiếp tục?","Khôi phục")))return;
