@@ -84,6 +84,8 @@ label{display:block;font-size:13px;color:var(--mute);margin:10px 0 4px}
 .mh{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}.mh .btn{padding:6px 10px;font-size:13px}
 .mg{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px}.mc input{padding:9px 10px;font-size:15px}
 .mv2{padding:8px 0;border-top:1px dashed var(--line)}.mv2:first-of-type{border-top:0}
+#lock{position:fixed;inset:0;z-index:50;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:24px}
+#lock[hidden]{display:none!important}.lk{width:min(100%,380px)}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:90px;background:var(--ink);color:var(--bg);padding:8px 14px;border-radius:10px;font-size:14px;display:none}
 </style>
 </head>
@@ -108,12 +110,14 @@ label{display:block;font-size:13px;color:var(--mute);margin:10px 0 4px}
     <button class="btn" id="csv">Xuất Excel (CSV)</button>
     <button class="btn" id="imp">Khôi phục</button>
     <button class="btn" id="ren">Sửa tên</button>
+    <button class="btn" id="pw">🔒 Đặt mật khẩu</button>
     <button class="btn" id="impw">Nhập từ Word</button><input type="file" id="fw" accept=".docx" hidden>
     <input type="file" id="file" accept=".json,application/json" hidden>
   </div>
 </div>
 <button class="btn pri fab" id="add">+ Thêm</button>
 <div class="toast" id="toast"></div>
+<div id="lock" hidden><div class="lk"><h1 class="big" style="font-size:22px;margin:0 0 6px">Phần mềm quản lý Bon R Lông</h1><p class="sub">Nhập mật khẩu để mở.</p><input id="lpw" type="password" autocomplete="off" placeholder="Mật khẩu" aria-label="Mật khẩu"><div id="lerr" class="sub" style="color:var(--red);min-height:1.4em"></div><button class="btn pri" id="lgo" style="width:100%;margin-top:6px">Mở khóa</button></div></div>
 <dialog id="cdlg"></dialog><dialog id="vdlg"></dialog><dialog id="mdlg"></dialog><dialog id="dlg"><form id="f" method="dialog"></form></dialog>
 
 <script>
@@ -181,7 +185,7 @@ function renameList(id){
   $("dlg").showModal();setTimeout(()=>{const i=$("rn");i.focus();i.select()},60)}
 function render(){
   fix();
-  $("homeV").hidden=view!=="home";$("listV").hidden=view!=="list";$("add").hidden=view!=="list";$("ren").hidden=view!=="home";$("ren").textContent=renaming?"Xong":"Sửa tên";$("ren").classList.toggle("pri",renaming);$("rnhint").hidden=!renaming;$("hgrid").classList.toggle("renaming",renaming);$("cols").hidden=$("csv").hidden=view!=="list";$("impw").hidden=!(view==="list"&&L().fields.some(f=>f[2]==="members"));
+  $("homeV").hidden=view!=="home";$("listV").hidden=view!=="list";$("add").hidden=view!=="list";$("ren").hidden=$("pw").hidden=view!=="home";$("pw").textContent=lockCfg()?"🔒 Đổi / tắt mật khẩu":"🔒 Đặt mật khẩu";$("ren").textContent=renaming?"Xong":"Sửa tên";$("ren").classList.toggle("pri",renaming);$("rnhint").hidden=!renaming;$("hgrid").classList.toggle("renaming",renaming);$("cols").hidden=$("csv").hidden=view!=="list";$("impw").hidden=!(view==="list"&&L().fields.some(f=>f[2]==="members"));
   if(view==="home"){$("hgrid").innerHTML=tilesHTML();return}
   const cl=L();$("curname").textContent=cl.name;$("curcount").textContent=data[cl.id].length+" mục";
   const l=L(),q=$("q").value.trim().toLowerCase(),main=l.fields[0][0];
@@ -428,6 +432,36 @@ $("file").onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileRe
     if(d.v>=2){LISTS=d.schema;data=d.data;if(d.files){await fclear();for(const f of d.files){const bin=atob(f.b64),u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);await fput({id:f.id,name:f.name,type:f.type,blob:new Blob([u],{type:f.type})})}}}else{LISTS=JSON.parse(JSON.stringify(PRESET));data=Object.assign({dv:[],tq:[],hn:[],cn:[]},d)}
     cur=LISTS[0].id;view="home";save();render();toast("Đã khôi phục")}catch(err){toast("File không hợp lệ")}};
   r.readAsText(f);e.target.value=""};
+const LKEY="bon-lock-v1";let locked=false,hiddenAt=0;
+const b2s=b=>btoa(String.fromCharCode(...new Uint8Array(b))),s2b=x=>Uint8Array.from(atob(x),c=>c.charCodeAt(0));
+async function pwHash(pw,salt,it){const k=await crypto.subtle.importKey("raw",new TextEncoder().encode(pw),"PBKDF2",false,["deriveBits"]);return crypto.subtle.deriveBits({name:"PBKDF2",hash:"SHA-256",salt,iterations:it},k,256)}
+function lockCfg(){try{return JSON.parse(localStorage.getItem(LKEY)||"null")}catch(e){return null}}
+function saveCfg(c){try{localStorage.setItem(LKEY,JSON.stringify(c))}catch(e){}}
+async function setPw(pw){const salt=crypto.getRandomValues(new Uint8Array(16)),it=150000,h=await pwHash(pw,salt,it);saveCfg({s:b2s(salt),h:b2s(h),i:it,f:0,u:0})}
+async function checkPw(pw){const c=lockCfg();if(!c)return true;return b2s(await pwHash(pw,s2b(c.s),c.i))===c.h}
+$("lgo").onclick=async()=>{const c=lockCfg();if(!c){$("lock").hidden=true;locked=false;return}
+  const now=Date.now();if(c.u>now){$("lerr").textContent="Thử lại sau "+Math.ceil((c.u-now)/1000)+" giây";return}
+  if(await checkPw($("lpw").value)){c.f=0;c.u=0;saveCfg(c);locked=false;$("lock").hidden=true;$("lpw").value="";$("lerr").textContent=""}
+  else{c.f=(c.f||0)+1;if(c.f>=5)c.u=now+Math.min(300,30*(c.f-4))*1000;saveCfg(c);$("lpw").value="";
+    $("lerr").textContent="Sai mật khẩu"+(c.u>now?", tạm khóa "+Math.ceil((c.u-now)/1000)+" giây":"")}};
+$("lpw").onkeydown=e=>{if(e.key==="Enter")$("lgo").click()};
+document.addEventListener("visibilitychange",()=>{if(!lockCfg())return;
+  if(document.hidden){hiddenAt=Date.now();if(!locked)$("lock").hidden=false}
+  else if(!locked){if(Date.now()-hiddenAt<30000)$("lock").hidden=true;else{locked=true;$("lpw").value="";$("lerr").textContent=""}}});
+$("pw").onclick=()=>{
+  if(!window.crypto||!crypto.subtle){info("Trình duyệt này chưa hỗ trợ đặt mật khẩu. Hãy mở app qua địa chỉ https.");return}
+  const on=!!lockCfg();$("f").onclick=null;$("f").oninput=null;
+  $("f").innerHTML=`<h1>${on?"Đổi / tắt mật khẩu":"Đặt mật khẩu"}</h1>${on?`<label for="p0">Mật khẩu hiện tại</label><input id="p0" type="password" autocomplete="off">`:""}<label for="p1">${on?"Mật khẩu mới (để trống nếu muốn tắt)":"Mật khẩu mới (từ 4 ký tự)"}</label><input id="p1" type="password" autocomplete="off"><label for="p2">Nhập lại mật khẩu mới</label><input id="p2" type="password" autocomplete="off"><p class="sub">Quên mật khẩu thì không mở lại được: phải xóa app khỏi màn hình chính, cài lại rồi Khôi phục từ file Sao lưu. Hãy sao lưu trước khi đặt.</p><div id="perr" class="sub" style="color:var(--red)"></div><div class="row"><button type="button" class="btn" id="x">Hủy</button><button class="btn pri" type="submit">Lưu</button></div>`;
+  $("x").onclick=()=>$("dlg").close();
+  $("f").onsubmit=async e=>{e.preventDefault();const err=m=>{$("perr").textContent=m};
+    if(on&&!(await checkPw($("p0").value))){err("Mật khẩu hiện tại chưa đúng");return}
+    const a=$("p1").value,b=$("p2").value;
+    if(on&&!a&&!b){try{localStorage.removeItem(LKEY)}catch(x){}$("dlg").close();render();toast("Đã tắt mật khẩu");return}
+    if(a.length<4){err("Mật khẩu cần từ 4 ký tự");return}
+    if(a!==b){err("Hai lần nhập chưa giống nhau");return}
+    await setPw(a);$("dlg").close();render();toast("Đã đặt mật khẩu")};
+  $("dlg").showModal()};
+if(lockCfg()){locked=true;$("lock").hidden=false}
 render();
 try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(e){}
 if("serviceWorker" in navigator&&location.protocol.startsWith("http")){addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(()=>{}))}
