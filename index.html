@@ -246,8 +246,10 @@ function parseHouseholds(html){
   return H}
 async function importWord(file){
   const l=L(),mf=l.fields.find(f=>f[2]==="members");if(!mf){toast("Danh sách này chưa có cột Thành viên");return}
+  if(!/\.docx$/i.test(file.name)){info("File <b>"+esc(file.name)+"</b> không có đuôi <b>.docx</b>. Nếu là Word đời cũ (.doc), fen mở bằng Word rồi lưu lại thành .docx.");return}
   toast("Đang đọc file Word…");let H;
-  try{await loadMammoth();const r=await mammoth.convertToHtml({arrayBuffer:await file.arrayBuffer()});H=parseHouseholds(r.value)}catch(e){toast("Không đọc được file (cần đuôi .docx)");return}
+  try{await loadMammoth()}catch(e){info("App chưa có file đọc Word. Fen kiểm tra kho GitHub đã có file <b>mammoth.browser.min.js</b> chưa, rồi mở app khi có mạng.");return}
+  try{const r=await mammoth.convertToHtml({arrayBuffer:await file.arrayBuffer()});H=parseHouseholds(r.value)}catch(e){info("Không đọc được nội dung file Word này. File có thể bị hỏng hoặc được bảo vệ bằng mật khẩu.");return}
   if(!H.length){toast("Không thấy bảng hộ gia đình trong file");return}
   const cls=[...new Set(H.map(h=>h.cls||"__"))],people=H.reduce((a,h)=>a+1+h.mem.length,0),d=$("cdlg"),main=l.fields[0][0];d.onclose=null;
   d.innerHTML=`<form method="dialog" style="padding:16px"><h1>Nhập từ Word</h1><p>Tìm thấy <b>${H.length}</b> hộ, <b>${people}</b> người (tính cả chủ hộ).</p><label for="ic">Chỉ nhập hộ thuộc loại</label><select id="ic"><option value="*">Tất cả</option>${cls.map(c=>`<option value="${esc(c)}">${c==="__"?"(chưa ghi loại)":esc(c)}</option>`).join("")}</select><div class="row"><button class="btn" value="no">Hủy</button><button type="button" class="btn pri" id="ig">Nhập</button></div></form>`;
@@ -344,6 +346,7 @@ function newList(){
   $("dlg").showModal();setTimeout(()=>$("nl").focus(),60)}
 const extOf=n=>(String(n).split(".").pop()||"").toLowerCase();
 function kindOf(a){const e=extOf(a.name),t=a.type||"";if(t.startsWith("image/"))return"img";if(t==="application/pdf"||e==="pdf")return"pdf";if(e==="docx"||t.includes("wordprocessingml"))return"docx";if(t.startsWith("text/")||e==="txt")return"txt";return"other"}
+function info(msg){const d=$("cdlg");d.onclose=null;d.innerHTML=`<form method="dialog" style="padding:16px"><p style="margin:0 0 12px">${msg}</p><div class="row"><button class="btn pri" value="ok">Đã hiểu</button></div></form>`;d.showModal()}
 function loadMammoth(){return window.mammoth?Promise.resolve():new Promise((res,rej)=>{const s=document.createElement("script");s.src="mammoth.browser.min.js";s.onload=res;s.onerror=()=>rej(new Error("mammoth"));document.head.appendChild(s)})}
 function cleanHtml(h){const t=document.createElement("template");t.innerHTML=h;
   t.content.querySelectorAll("script,iframe,object,embed,style,link,form").forEach(n=>n.remove());
