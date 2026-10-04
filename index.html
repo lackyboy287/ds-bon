@@ -186,8 +186,42 @@ function render(){
   $("list").innerHTML=rows.map(r=>`<div class="item${sorting?" sorting":""}" data-i="${r.id}"><div class="ib"><h3>${esc(r[main])}</h3><div class="meta">${l.fields.filter(f=>l.show.includes(f[0])&&hv(f,r)).map(f=>`<span>${esc(f[1])}: <b>${esc(fmt(f[2],r[f[0]]))}</b></span>`).join("")}</div></div>${sorting?`<div class="mv"><button class="btn" data-m="-1" aria-label="Đưa lên">▲</button><button class="btn" data-m="1" aria-label="Đưa xuống">▼</button></div>`:""}</div>`).join("")
 }
 function ask(msg,ok="Xóa"){return new Promise(res=>{const d=$("cdlg");d.innerHTML=`<form method="dialog" style="padding:16px"><p>${esc(msg)}</p><div class="row"><button class="btn" value="no">Hủy</button><button class="btn pri" value="yes">${ok}</button></div></form>`;d.returnValue="";d.onclose=()=>res(d.returnValue==="yes");d.showModal()})}
-function open(id){
-  const l=L(),r=data[l.id].find(x=>x.id===id)||{},main=l.fields[0][0],att={},gone=[];let curK=null;
+const norm=s=>String(s).replace(/đ/g,"d").replace(/Đ/g,"D").normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[^a-z0-9]+/g," ").trim();
+function parsePairs(txt){const L=txt.split(/\r?\n/).map(x=>x.trim()).filter(Boolean),out=[];
+  for(let i=0;i<L.length;i++){const c=L[i].indexOf(":");if(c<=0||c>60)continue;
+    const lab=L[i].slice(0,c).trim(),val=L[i].slice(c+1).trim();
+    if(val)out.push([lab,val]);
+    else if(i+1<L.length&&L[i+1].indexOf(":")<0){out.push([lab,L[i+1]]);i++}}
+  return out}
+function matchField(lab,fs){const na=norm(lab),A=new Set(na.split(" "));let best=null,bs=0;
+  for(const f of fs){const nb=norm(f[1]),B=nb.split(" ");if(nb===na)return f;
+    const n=B.filter(x=>A.has(x)).length;
+    if(n>=2&&(n===B.length||n===A.size)){const sc=n*10-Math.abs(B.length-A.size);if(sc>bs){bs=sc;best=f}}}
+  return best}
+function conv(t,v){v=String(v).trim();
+  if(t==="date"){const m=v.match(/(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{4})/);return m?`${m[3]}-${m[2].padStart(2,"0")}-${m[1].padStart(2,"0")}`:""}
+  if(t==="number")return v.replace(/\D/g,"");
+  return v}
+function pasteDlg(l){
+  const d=$("cdlg");d.onclose=null;
+  d.innerHTML=`<form method="dialog" style="padding:16px"><h1>Dán thông tin</h1><p class="sub">Mở ảnh trong app Ảnh, chạm giữ vào chữ, chọn <b>Chọn tất cả</b> rồi <b>Sao chép</b>. Quay lại đây dán vào ô dưới.</p><textarea id="pt" rows="8" placeholder="Họ và tên: ..."></textarea><div class="row"><button class="btn" value="no">Hủy</button><button type="button" class="btn pri" id="pgo">Phân tích</button></div></form>`;
+  const finish=vals=>{d.close();$("dlg").close();open(null,vals);toast("Đã điền "+Object.keys(vals).length+" mục, kiểm tra rồi bấm Lưu")};
+  $("pgo").onclick=()=>{
+    const pairs=parsePairs($("pt").value);if(!pairs.length){toast("Không thấy dòng dạng “Nhãn: giá trị”");return}
+    const fs=l.fields.filter(f=>f[2]!=="file"),vals={},miss=new Map();
+    pairs.forEach(([lab,val])=>{const f=matchField(lab,fs);
+      if(f){const v=conv(f[2],val);if(v!==""&&(!vals[f[0]]||(/\*/.test(vals[f[0]])&&!/\*/.test(v))))vals[f[0]]=v}
+      else{const k=norm(lab),o=miss.get(k);if(!o||(/\*/.test(o[1])&&!/\*/.test(val)))miss.set(k,[lab,val])}});
+    const ms=[...miss.values()],n=Object.keys(vals).length;
+    if(!ms.length){if(!n){toast("Không có mục nào khớp với cột");return}finish(vals);return}
+    const masked=[...Object.values(vals),...ms.map(m=>m[1])].some(v=>/\*\*\*/.test(v));
+    d.innerHTML=`<form method="dialog" style="padding:16px"><h1>Nhận được ${n+ms.length} mục</h1><p>Chưa có cột cho: <b>${ms.map(m=>esc(m[0])).join(", ")}</b></p>${masked?'<p class="sub">Có số bị ẩn dấu ***. Muốn đủ số thì hiện số trên app nguồn rồi chụp lại.</p>':""}<div style="display:flex;flex-direction:column;gap:8px;margin-top:14px"><button type="button" class="btn pri" id="pn">Tạo ${ms.length} cột mới &amp; điền</button>${n?`<button type="button" class="btn" id="po">Chỉ điền ${n} mục có sẵn</button>`:""}<button class="btn" value="no">Hủy</button></div></form>`;
+    $("pn").onclick=()=>{ms.forEach(([lab,val])=>{const k="c_"+Date.now().toString(36)+Math.random().toString(36).slice(2,5);
+      l.fields.push([k,lab,/dien thoai|sdt/.test(norm(lab))?"tel":"text"]);vals[k]=val});save();finish(vals)};
+    if($("po"))$("po").onclick=()=>finish(vals)};
+  d.showModal();setTimeout(()=>$("pt").focus(),60)}
+function open(id,init){
+  const l=L(),r=data[l.id].find(x=>x.id===id)||init||{},main=l.fields[0][0],att={},gone=[];let curK=null;
   l.fields.forEach(f=>{if(f[2]==="file")att[f[0]]=(r[f[0]]||[]).map(a=>({...a}))});
   const isImg=a=>a.type.startsWith("image/");
   const blobOf=async a=>a.blob||((await fget(a.id))||{}).blob;
@@ -196,7 +230,7 @@ function open(id){
     box.innerHTML=att[k].map(a=>`<div class="at"><div class="th" data-th="${a.id}">${isImg(a)?"":"📄"}</div><div class="an"><b>${esc(a.name)}</b><span>${fsize(a.size)}</span></div><button type="button" class="btn" data-av="${a.id}" data-kk="${k}">Xem</button><button type="button" class="btn del" data-ax="${a.id}" data-kk="${k}">Xóa</button></div>`).join("");
     for(const a of att[k])if(isImg(a)){const bl=await blobOf(a),el=box.querySelector(`[data-th="${a.id}"]`);if(bl&&el){const im=new Image();im.src=URL.createObjectURL(bl);el.appendChild(im)}}
   }
-  $("f").innerHTML=`<h1>${id?"Sửa":"Thêm"} · ${esc(l.name)}</h1>`+l.fields.map(([k,n,t])=>t==="file"?`<label>${esc(n)}</label><div data-ak="${k}"></div><button type="button" class="btn" style="width:100%;margin-top:6px" data-aa="${k}">+ Thêm ảnh / tài liệu</button>`:`<label for="f_${k}">${esc(n)}</label>`+(t==="area"?`<textarea id="f_${k}" name="${k}" rows="3">${esc(r[k])}</textarea>`:`<input id="f_${k}" name="${k}" type="${t}" ${t==="number"?'inputmode="numeric"':""} value="${esc(r[k])}" ${k===main?"required":""}>`)).join("")+
+  $("f").innerHTML=`<h1>${id?"Sửa":"Thêm"} · ${esc(l.name)}</h1>`+(id?"":`<button type="button" class="btn" style="width:100%;margin-top:4px" data-paste="1">📋 Dán thông tin từ ảnh / tin nhắn</button>`)+l.fields.map(([k,n,t])=>t==="file"?`<label>${esc(n)}</label><div data-ak="${k}"></div><button type="button" class="btn" style="width:100%;margin-top:6px" data-aa="${k}">+ Thêm ảnh / tài liệu</button>`:`<label for="f_${k}">${esc(n)}</label>`+(t==="area"?`<textarea id="f_${k}" name="${k}" rows="3">${esc(r[k])}</textarea>`:`<input id="f_${k}" name="${k}" type="${t}" ${t==="number"?'inputmode="numeric"':""} value="${esc(r[k])}" ${k===main?"required":""}>`)).join("")+
   `<input type="file" id="fi" multiple hidden accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"><div class="row"><button type="button" class="btn" id="x">Hủy</button>${id?'<button type="button" class="btn del" id="d">Xóa</button>':""}<button class="btn pri" type="submit">Lưu</button></div>`;
   $("dlg").showModal();
   Object.keys(att).forEach(drawAtt);
@@ -204,6 +238,7 @@ function open(id){
   if(id)$("d").onclick=async()=>{if(await ask("Xóa mục này (kể cả ảnh, tài liệu đính kèm)?")){try{await rmFiles(l,r)}catch(e){}data[l.id]=data[l.id].filter(x=>x.id!==id);save();render();$("dlg").close()}};
   $("f").onclick=async e=>{
     const t=e.target.closest("button");if(!t)return;
+    if(t.dataset.paste){pasteDlg(l);return}
     if(t.dataset.aa){curK=t.dataset.aa;$("fi").click();return}
     const k=t.dataset.kk,i=k?att[k].findIndex(a=>a.id===(t.dataset.av||t.dataset.ax)):-1;if(i<0)return;const a=att[k][i];
     if(t.dataset.ax){att[k].splice(i,1);if(!a.blob)gone.push(a.id);drawAtt(k);return}
