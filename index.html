@@ -71,6 +71,15 @@ label{display:block;font-size:13px;color:var(--mute);margin:10px 0 4px}
 .by{display:inline-block;margin:0 0 10px;padding:5px 12px;border-radius:999px;background:var(--chip);font-size:13px;font-weight:500}
 .back{font:inherit;background:none;border:0;color:var(--red);padding:6px 0 2px;font-size:15px;font-weight:500}
 .tw{position:relative;display:flex}.tw .tile{flex:1}.renaming .tile:not(.add){border-color:var(--red);border-style:dashed}
+#vdlg{margin:0;width:100%;max-width:100%;height:100%;max-height:100%;border-radius:0;padding:0}
+#vdlg[open]{display:flex;flex-direction:column}
+.vh{display:flex;gap:8px;align-items:center;padding:calc(10px + env(safe-area-inset-top,0px)) 12px 10px;border-bottom:1px solid var(--line);background:var(--card)}
+.vh b{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:15px}
+.vb{flex:1;overflow:auto;-webkit-overflow-scrolling:touch;padding:14px 14px calc(14px + env(safe-area-inset-bottom,0px))}
+.vimg{max-width:100%;display:block;margin:0 auto}.vpdf{width:100%;height:100%;min-height:75vh;border:0;background:#fff}
+.vtxt{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;margin:0}
+.vdoc{line-height:1.65;font-size:16px;overflow-wrap:anywhere}.vdoc p{margin:0 0 .8em}.vdoc img{max-width:100%;height:auto}
+.vdoc table{border-collapse:collapse;display:block;max-width:100%;overflow-x:auto}.vdoc td,.vdoc th{border:1px solid var(--line);padding:4px 8px;vertical-align:top}
 .toast{position:fixed;left:50%;transform:translateX(-50%);bottom:90px;background:var(--ink);color:var(--bg);padding:8px 14px;border-radius:10px;font-size:14px;display:none}
 </style>
 </head>
@@ -100,7 +109,7 @@ label{display:block;font-size:13px;color:var(--mute);margin:10px 0 4px}
 </div>
 <button class="btn pri fab" id="add">+ Thêm</button>
 <div class="toast" id="toast"></div>
-<dialog id="cdlg"></dialog><dialog id="mdlg"></dialog><dialog id="dlg"><form id="f" method="dialog"></form></dialog>
+<dialog id="cdlg"></dialog><dialog id="vdlg"></dialog><dialog id="mdlg"></dialog><dialog id="dlg"><form id="f" method="dialog"></form></dialog>
 
 <script>
 const PRESET=[
@@ -184,7 +193,7 @@ function open(id){
   const blobOf=async a=>a.blob||((await fget(a.id))||{}).blob;
   async function drawAtt(k){
     const box=document.querySelector(`[data-ak="${k}"]`);if(!box)return;
-    box.innerHTML=att[k].map(a=>`<div class="at"><div class="th" data-th="${a.id}">${isImg(a)?"":"📄"}</div><div class="an"><b>${esc(a.name)}</b><span>${fsize(a.size)}</span></div><button type="button" class="btn" data-av="${a.id}" data-kk="${k}">${isImg(a)?"Xem":"Lưu về máy"}</button><button type="button" class="btn del" data-ax="${a.id}" data-kk="${k}">Xóa</button></div>`).join("");
+    box.innerHTML=att[k].map(a=>`<div class="at"><div class="th" data-th="${a.id}">${isImg(a)?"":"📄"}</div><div class="an"><b>${esc(a.name)}</b><span>${fsize(a.size)}</span></div><button type="button" class="btn" data-av="${a.id}" data-kk="${k}">Xem</button><button type="button" class="btn del" data-ax="${a.id}" data-kk="${k}">Xóa</button></div>`).join("");
     for(const a of att[k])if(isImg(a)){const bl=await blobOf(a),el=box.querySelector(`[data-th="${a.id}"]`);if(bl&&el){const im=new Image();im.src=URL.createObjectURL(bl);el.appendChild(im)}}
   }
   $("f").innerHTML=`<h1>${id?"Sửa":"Thêm"} · ${esc(l.name)}</h1>`+l.fields.map(([k,n,t])=>t==="file"?`<label>${esc(n)}</label><div data-ak="${k}"></div><button type="button" class="btn" style="width:100%;margin-top:6px" data-aa="${k}">+ Thêm ảnh / tài liệu</button>`:`<label for="f_${k}">${esc(n)}</label>`+(t==="area"?`<textarea id="f_${k}" name="${k}" rows="3">${esc(r[k])}</textarea>`:`<input id="f_${k}" name="${k}" type="${t}" ${t==="number"?'inputmode="numeric"':""} value="${esc(r[k])}" ${k===main?"required":""}>`)).join("")+
@@ -199,10 +208,7 @@ function open(id){
     const k=t.dataset.kk,i=k?att[k].findIndex(a=>a.id===(t.dataset.av||t.dataset.ax)):-1;if(i<0)return;const a=att[k][i];
     if(t.dataset.ax){att[k].splice(i,1);if(!a.blob)gone.push(a.id);drawAtt(k);return}
     const bl=await blobOf(a);if(!bl){toast("Không mở được tệp");return}
-    if(!isImg(a)){saveFile(a.name,bl);return}
-    const d=$("cdlg"),u=URL.createObjectURL(bl);
-    d.innerHTML=`<form method="dialog" style="padding:12px"><img src="${u}" alt="" style="max-width:100%;max-height:68vh;display:block;margin:0 auto;border-radius:8px"><div class="row"><button class="btn" value="no">Đóng</button><button type="button" class="btn pri" id="sv">Lưu về máy</button></div></form>`;
-    d.onclose=()=>URL.revokeObjectURL(u);$("sv").onclick=()=>saveFile(a.name,bl);d.showModal()};
+    showFile(a,bl)};
   $("fi").onchange=async e=>{const fs=[...e.target.files];e.target.value="";if(!fs.length)return;toast("Đang xử lý tệp…");
     for(const f of fs){if(f.size>25e6&&!f.type.startsWith("image/")){toast("Bỏ qua tệp quá 25 MB: "+f.name);continue}
       try{att[curK].push(await prep(f))}catch(err){toast("Không đọc được "+f.name)}}
@@ -252,6 +258,28 @@ function newList(){
     LISTS.push($("nk").value==="d"?{id,name:n,fields:[["name","Tên tài liệu","text"],["date","Ngày","date"],["kind","Loại (nghị quyết, biên bản, ảnh…)","text"],["files","Ảnh / tệp đính kèm","file"],["note","Ghi chú","area"]],show:["date","kind","files"]}:{id,name:n,fields:[["name","Họ và tên","text"],["phone","Số điện thoại","tel"],["note","Ghi chú","area"]],show:["phone"]});
     data[id]=[];cur=id;view="list";save();render();$("dlg").close();openCols()};
   $("dlg").showModal();setTimeout(()=>$("nl").focus(),60)}
+const extOf=n=>(String(n).split(".").pop()||"").toLowerCase();
+function kindOf(a){const e=extOf(a.name),t=a.type||"";if(t.startsWith("image/"))return"img";if(t==="application/pdf"||e==="pdf")return"pdf";if(e==="docx"||t.includes("wordprocessingml"))return"docx";if(t.startsWith("text/")||e==="txt")return"txt";return"other"}
+function loadMammoth(){return window.mammoth?Promise.resolve():new Promise((res,rej)=>{const s=document.createElement("script");s.src="mammoth.browser.min.js";s.onload=res;s.onerror=()=>rej(new Error("mammoth"));document.head.appendChild(s)})}
+function cleanHtml(h){const t=document.createElement("template");t.innerHTML=h;
+  t.content.querySelectorAll("script,iframe,object,embed,style,link,form").forEach(n=>n.remove());
+  t.content.querySelectorAll("*").forEach(n=>{[...n.attributes].forEach(at=>{if(/^on/i.test(at.name)||/^\s*javascript:/i.test(at.value))n.removeAttribute(at.name)})});
+  t.content.querySelectorAll("a").forEach(a=>a.removeAttribute("href"));return t.innerHTML}
+async function showFile(a,bl){
+  const d=$("vdlg"),k=kindOf(a);let url=null;
+  d.innerHTML=`<div class="vh"><b>${esc(a.name)}</b><button type="button" class="btn" id="vs">Lưu về máy</button><button type="button" class="btn pri" id="vx">Đóng</button></div><div class="vb" id="vb"><p class="sub">Đang mở…</p></div>`;
+  $("vx").onclick=()=>d.close();$("vs").onclick=()=>saveFile(a.name,bl);
+  d.onclose=()=>{if(url)URL.revokeObjectURL(url)};
+  if(!d.open)d.showModal();
+  const vb=$("vb");
+  try{
+    if(k==="img"){url=URL.createObjectURL(bl);vb.innerHTML=`<img class="vimg" src="${url}" alt="">`}
+    else if(k==="pdf"){url=URL.createObjectURL(bl);vb.innerHTML=`<iframe class="vpdf" src="${url}" title="${esc(a.name)}"></iframe>`}
+    else if(k==="txt"){vb.innerHTML=`<pre class="vtxt">${esc(await bl.text())}</pre>`}
+    else if(k==="docx"){await loadMammoth();const r=await mammoth.convertToHtml({arrayBuffer:await bl.arrayBuffer()});vb.innerHTML=`<div class="vdoc">${cleanHtml(r.value)||"<p>Tệp không có nội dung chữ.</p>"}</div>`}
+    else vb.innerHTML=`<p class="sub">Định dạng này chưa xem trực tiếp được. Bấm “Lưu về máy” rồi mở bằng app khác.</p>`
+  }catch(e){vb.innerHTML=`<p class="sub">Không mở được tệp này. Bấm “Lưu về máy” để mở bằng app khác.</p>`}
+}
 function viewItem(id){
   const l=L(),r=data[l.id].find(x=>x.id===id);if(!r)return;
   const main=l.fields[0][0],fk=[];let h=`<h1>${esc(r[main])}</h1>`,calls="",any=false;
@@ -265,17 +293,14 @@ function viewItem(id){
   $("f").innerHTML=h;$("f").onsubmit=e=>e.preventDefault();
   const isImg=a=>a.type.startsWith("image/");
   fk.forEach(async k=>{const box=document.querySelector(`[data-vk="${k}"]`);
-    box.innerHTML=r[k].map(a=>`<div class="at"><div class="th" data-th="${a.id}">${isImg(a)?"":"📄"}</div><div class="an"><b>${esc(a.name)}</b><span>${fsize(a.size)}</span></div><button type="button" class="btn" data-va="${a.id}" data-kk="${k}">${isImg(a)?"Xem":"Lưu về máy"}</button></div>`).join("");
+    box.innerHTML=r[k].map(a=>`<div class="at"><div class="th" data-th="${a.id}">${isImg(a)?"":"📄"}</div><div class="an"><b>${esc(a.name)}</b><span>${fsize(a.size)}</span></div><button type="button" class="btn" data-va="${a.id}" data-kk="${k}">Xem</button></div>`).join("");
     for(const a of r[k])if(isImg(a)){try{const o=await fget(a.id),el=box.querySelector(`[data-th="${a.id}"]`);if(o&&el){const im=new Image();im.src=URL.createObjectURL(o.blob);el.appendChild(im)}}catch(e){}}});
   $("f").onclick=async e=>{const t=e.target.closest("button");if(!t)return;
     if(t.dataset.c==="x"){$("dlg").close();return}
     if(t.dataset.c==="e"){$("dlg").close();open(id);return}
     if(t.dataset.va){const a=(r[t.dataset.kk]||[]).find(x=>x.id===t.dataset.va);if(!a)return;
       const o=await fget(a.id).catch(()=>null);if(!o){toast("Không mở được tệp");return}
-      if(!isImg(a)){saveFile(a.name,o.blob);return}
-      const d=$("cdlg"),u=URL.createObjectURL(o.blob);
-      d.innerHTML=`<form method="dialog" style="padding:12px"><img src="${u}" alt="" style="max-width:100%;max-height:68vh;display:block;margin:0 auto;border-radius:8px"><div class="row"><button class="btn" value="no">Đóng</button><button type="button" class="btn pri" id="sv">Lưu về máy</button></div></form>`;
-      d.onclose=()=>URL.revokeObjectURL(u);$("sv").onclick=()=>saveFile(a.name,o.blob);d.showModal()}};
+      showFile(a,o.blob)}};
   $("dlg").showModal()}
 $("list").onclick=e=>{const i=e.target.closest(".item");if(!i)return;
   const m=e.target.closest("[data-m]");
